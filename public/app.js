@@ -1,13 +1,13 @@
 /* ============ STATE + persistence ============ */
 const PITCHES=[['C','1',261.63],['C#','1½',277.18],['D','2',293.66],['D#','2½',311.13],['E','3',329.63],['F','4',349.23],['F#','4½',369.99],['G','5',392.0],['G#','5½',415.3],['A','6',220.0],['A#','6½',233.08],['B','7',246.94]];
-const DEFAULTS={xp:0,done:{},streak:0,last:null,pitch:'C',names:'short'};
+const DEFAULTS={xp:0,done:{},streak:0,last:null,pitch:'C',names:'short',saHz:null,strict:'gentle',calSkipped:false};
 let S={...DEFAULTS,drone:false},ME=null,saveTimer=null;
 async function api(path,opts={}){
  const r=await fetch(path,{method:opts.method||'GET',headers:{'Content-Type':'application/json'},body:opts.body?JSON.stringify(opts.body):undefined,credentials:'same-origin',keepalive:!!opts.keepalive});
  let data={};try{data=await r.json()}catch(e){}
  if(!r.ok){const err=new Error(data.error||'Could not reach the server. Check your connection and try again.');err.status=r.status;throw err}
  return data}
-function progressPayload(){return {xp:S.xp,done:S.done,streak:S.streak,last:S.last,pitch:S.pitch,names:S.names}}
+function progressPayload(){return {xp:S.xp,done:S.done,streak:S.streak,last:S.last,pitch:S.pitch,names:S.names,saHz:S.saHz||null,strict:S.strict||'gentle',calSkipped:!!S.calSkipped}}
 function save(){if(!ME)return;clearTimeout(saveTimer);saveTimer=setTimeout(flush,600)}
 function flush(keepalive){clearTimeout(saveTimer);if(!ME)return;api('/api/progress',{method:'PUT',body:{progress:progressPayload()},keepalive}).then(()=>setSync('Saved')).catch(e=>setSync(e.status===401?'Logged out':'Not saved, retrying…',true))}
 function setSync(msg,bad){const el=document.getElementById('sync');if(el){el.textContent=msg;el.dataset.bad=bad?'1':''}if(bad&&ME)setTimeout(save,5000)}
@@ -15,7 +15,7 @@ addEventListener('pagehide',()=>{if(saveTimer)flush(true)});
 function signedIn(data){ME=data.user;S={...DEFAULTS,...(data.progress||{}),drone:S.drone};view='home';tab='learn';renderHome.scrolled=0;render()}
 const dayStr=d=>{const x=d||new Date();return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0')};
 function liveStreak(){if(!S.last)return 0;const y=new Date();y.setDate(y.getDate()-1);return (S.last===dayStr()||S.last===dayStr(y))?S.streak:0}
-function basePitch(){return (PITCHES.find(p=>p[0]===S.pitch)||PITCHES[0])[2]}
+function basePitch(){if(S.pitch==='mine'&&S.saHz)return S.saHz;return (PITCHES.find(p=>p[0]===S.pitch)||PITCHES[0])[2]}
 
 /* ============ AUDIO ============ */
 let AC=null,master,revIn,droneBus,noiseBuf,cur=null;
@@ -169,11 +169,12 @@ function openSettings(){
  const d=document.createElement('div');d.className='sheet';
  d.innerHTML=`<div class="card" role="dialog" aria-label="Settings"><div class="row" style="justify-content:space-between"><h3>Sruthi & settings</h3><button class="iconbtn" id="sClose" aria-label="Close">${I.close}</button></div>
   <div class="settings">
-   <label for="sPitch">Sruthi (your Sa) <select id="sPitch">${PITCHES.map(p=>`<option value="${p[0]}" ${p[0]===S.pitch?'selected':''}>${p[0]} · ${p[1]} kattai</option>`).join('')}</select></label>
-   <p class="muted" style="margin:-6px 0 0">Pick a Sa that feels easy to sing. Many men sing around C to D, many women around G to A.</p>
+   <label for="sPitch">Sruthi (your Sa) <select id="sPitch">${pitchOptions()}</select></label>
+   <p class="muted" style="margin:-6px 0 0">Pick a Sa that feels easy to sing. Or press <b>Find my Sa</b> and sing, and Kuyil uses your own voice.</p>
+   <label for="sStrict">Singing check <select id="sStrict">${Object.entries(LEVELS).map(([k,v])=>`<option value="${k}" ${k===(S.strict||'gentle')?'selected':''}>${v.label} (±${v.tol}¢)</option>`).join('')}</select></label>
    <label for="sNames">Swara labels <select id="sNames"><option value="short" ${S.names==='short'?'selected':''}>S R G M</option><option value="long" ${S.names==='long'?'selected':''}>Sa Ri Ga Ma</option></select></label>
    <div class="row"><button class="btn ghost" id="sTest">${I.play} Test Sa</button><button class="btn ghost" id="sFind">${I.mic} Find my Sa</button></div>
-   <p class="muted" id="sFindMsg" style="margin:0">Find my Sa: hum a low, comfortable note for two seconds and Kuyil picks the nearest sruthi.</p>
+   <p class="muted" id="sFindMsg" style="margin:0">Find my Sa: sing a comfortable “saaa” for two seconds and Kuyil uses that exact pitch as your Sa.</p>
    <hr style="border:0;border-top:2px solid var(--line);width:100%;margin:4px 0">
    <div class="row" style="justify-content:space-between"><span>Signed in as <b>${esc(ME?ME.username:'')}</b> · <span id="sync" class="muted">Saved</span></span><button class="btn ghost" id="sOut">Log out</button></div>
    <div class="row"><button class="btn ghost" id="sReset">Reset progress</button></div>
@@ -184,6 +185,7 @@ function openSettings(){
  d.onclick=e=>{if(e.target===d)close()};$('#sClose').onclick=close;
  $('#sPitch').onchange=e=>{S.pitch=e.target.value;save();tapNote({sw:'S',o:0})};
  $('#sNames').onchange=e=>{S.names=e.target.value;save()};
+ $('#sStrict').onchange=e=>{S.strict=e.target.value;save()};
  $('#sTest').onclick=()=>playSeq("S P S'",{bpm:80});
  $('#sFind').onclick=()=>findMySa($('#sFindMsg'),$('#sPitch'));
  $('#sOut').onclick=async()=>{flush();try{await api('/api/logout',{method:'POST'})}catch(e){}ME=null;S={...DEFAULTS,drone:S.drone};if(S.drone)setDrone(false);d.remove();view='auth';render()};
@@ -352,7 +354,7 @@ function practiceHTML(){
   <div class="card"><h3>Swara pads</h3><p class="sub">Play freely. Turn on the tanpura and find each swara against the drone.</p>
    <label class="muted" for="prRaga" style="display:flex;gap:8px;align-items:center">Raga <select id="prRaga">${Object.entries(RAGAS).map(([k,v])=>`<option value="${k}" ${k===prRaga?'selected':''}>${v.name}</option>`).join('')}</select></label>
    <div class="pads" id="prPads">${pads.map((p,i)=>`<button class="pad" style="--h:${SW_HUE[p.sw]}" data-pp="${i}">${swHTML(p)}<small>${SW_SHORT[p.sw]}</small></button>`).join('')}</div>
-   <div class="row"><button class="playbtn" data-drone aria-pressed="${S.drone}">${I.drone} Tanpura</button><span class="muted">Sruthi: ${S.pitch}</span></div></div>
+   <div class="row"><button class="playbtn" data-drone aria-pressed="${S.drone}">${I.drone} Tanpura</button><span class="muted">Sruthi: ${S.pitch==="mine"&&S.saHz?Math.round(S.saHz)+" Hz (your Sa)":S.pitch}</span></div></div>
   <div class="card"><h3>Swara tuner</h3><p class="sub">Sing any note and Kuyil shows which swara it is, against your sruthi.</p>
    ${tunerHTML()}</div>
   <div class="card" id="prPlayer"><h3>Sing-along library</h3><p class="sub">Every exercise from the lessons, ready to sing with.</p>
