@@ -139,8 +139,11 @@ app.put('/api/progress', requireUser, async (req, res, next) => {
 });
 
 // ---- static app ----
-app.use(express.static(path.join(here, 'public'), { maxAge: PROD ? '1h' : 0 }));
-app.get('/{*any}', (req, res) => res.sendFile(path.join(here, 'public', 'index.html')));
+// Browsers must check for a newer copy on every load (a cheap ETag check), so a deploy
+// reaches everyone at once instead of after an hour of stale lessons and singing code.
+const fresh = res => res.setHeader('Cache-Control', 'no-cache');
+app.use(express.static(path.join(here, 'public'), { setHeaders: fresh }));
+app.get('/{*any}', (req, res) => { fresh(res); res.sendFile(path.join(here, 'public', 'index.html')); });
 
 app.use((err, req, res, next) => {
   console.error(err);

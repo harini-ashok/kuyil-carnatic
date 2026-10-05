@@ -1,13 +1,13 @@
 /* ============ STATE + persistence ============ */
 const PITCHES=[['C','1',261.63],['C#','1½',277.18],['D','2',293.66],['D#','2½',311.13],['E','3',329.63],['F','4',349.23],['F#','4½',369.99],['G','5',392.0],['G#','5½',415.3],['A','6',220.0],['A#','6½',233.08],['B','7',246.94]];
-const DEFAULTS={xp:0,done:{},streak:0,last:null,pitch:'C',names:'short',saHz:null,strict:'gentle',calSkipped:false};
+const DEFAULTS={xp:0,done:{},streak:0,last:null,pitch:'C',names:'short',saHz:null,strict:'gentle',calSkipped:false,calV:0};
 let S={...DEFAULTS,drone:false},ME=null,saveTimer=null;
 async function api(path,opts={}){
  const r=await fetch(path,{method:opts.method||'GET',headers:{'Content-Type':'application/json'},body:opts.body?JSON.stringify(opts.body):undefined,credentials:'same-origin',keepalive:!!opts.keepalive});
  let data={};try{data=await r.json()}catch(e){}
  if(!r.ok){const err=new Error(data.error||'Could not reach the server. Check your connection and try again.');err.status=r.status;throw err}
  return data}
-function progressPayload(){return {xp:S.xp,done:S.done,streak:S.streak,last:S.last,pitch:S.pitch,names:S.names,saHz:S.saHz||null,strict:S.strict||'gentle',calSkipped:!!S.calSkipped}}
+function progressPayload(){return {xp:S.xp,done:S.done,streak:S.streak,last:S.last,pitch:S.pitch,names:S.names,saHz:S.saHz||null,strict:S.strict||'gentle',calSkipped:!!S.calSkipped,calV:S.calV||0}}
 function save(){if(!ME)return;clearTimeout(saveTimer);saveTimer=setTimeout(flush,600)}
 function flush(keepalive){clearTimeout(saveTimer);if(!ME)return;api('/api/progress',{method:'PUT',body:{progress:progressPayload()},keepalive}).then(()=>setSync('Saved')).catch(e=>setSync(e.status===401?'Logged out':'Not saved, retrying…',true))}
 function setSync(msg,bad){const el=document.getElementById('sync');if(el){el.textContent=msg;el.dataset.bad=bad?'1':''}if(bad&&ME)setTimeout(save,5000)}
