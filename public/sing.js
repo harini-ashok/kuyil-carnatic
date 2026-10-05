@@ -6,7 +6,7 @@ let MIC=null;
 const LEVELS={gentle:{tol:60,hold:.35,label:'Gentle'},normal:{tol:40,hold:.5,label:'Normal'},strict:{tol:25,hold:.6,label:'Strict'}};
 const lvl=()=>LEVELS[S.strict]||LEVELS.gentle;
 async function startMic(onPitch){
- ac();stopMic();
+ ac();stopMic();setAudioSession('play-and-record');
  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw new Error('This browser can’t use the microphone. Try Chrome, Safari or Firefox.');
  const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:true}});
  const Ctx=window.AudioContext||window.webkitAudioContext,mc=new Ctx();if(mc.state==='suspended')await mc.resume();
@@ -18,7 +18,7 @@ async function startMic(onPitch){
   const f=hist.length>=3?[...hist].sort((a,b)=>a-b)[hist.length>>1]:-1;
   onPitch(f,r.rms)},40)};
  return MIC}
-function stopMic(){if(!MIC)return;clearInterval(MIC.timer);MIC.stream.getTracks().forEach(t=>t.stop());try{MIC.src.disconnect();MIC.mc.close()}catch(e){}MIC=null;if(window._droneWasOn){window._droneWasOn=false;setDrone(true)}}
+function stopMic(){if(!MIC)return;clearInterval(MIC.timer);MIC.stream.getTracks().forEach(t=>t.stop());try{MIC.src.disconnect();MIC.mc.close()}catch(e){}MIC=null;setAudioSession('playback');if(AC&&AC.state!=='running')AC.resume().catch(()=>{});if(window._droneWasOn){window._droneWasOn=false;setDrone(true)}}
 /* YIN pitch estimate, limited to the singing range (70–1000 Hz) */
 function yin(buf,sr){
  let rms=0;for(let i=0;i<buf.length;i++)rms+=buf[i]*buf[i];rms=Math.sqrt(rms/buf.length);
