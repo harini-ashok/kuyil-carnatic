@@ -28,7 +28,23 @@ function ac(){
   conv.buffer=b;revIn=AC.createGain();const rg=AC.createGain();rg.gain.value=.2;revIn.connect(conv);conv.connect(rg);rg.connect(comp);
   noiseBuf=AC.createBuffer(1,AC.sampleRate*.5,AC.sampleRate);const nd=noiseBuf.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1;
   droneBus=AC.createGain();droneBus.gain.value=.5;droneBus.connect(master);droneBus.connect(revIn);}
- if(AC.state==='suspended')AC.resume();return AC}
+ if(AC.state!=='running')AC.resume().catch(()=>{});return AC}
+/* Phones: iPhones mute Web Audio when the ring/silent switch is on unless the page
+   is also playing a media element, and every browser keeps audio locked until a
+   tap. On the first touch we start the context, play one silent sample, and loop a
+   silent <audio> so the page counts as media playback. */
+let unlocked=false,silentEl=null;
+function silentWavUrl(){const n=4410,b=new ArrayBuffer(44+n*2),v=new DataView(b),w=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
+ w(0,'RIFF');v.setUint32(4,36+n*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+ v.setUint32(24,44100,true);v.setUint32(28,88200,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*2,true);
+ return URL.createObjectURL(new Blob([b],{type:'audio/wav'}))}
+function setAudioSession(type){try{if(navigator.audioSession)navigator.audioSession.type=type}catch(e){}}
+function unlockAudio(){
+ try{ac();const src=AC.createBufferSource();src.buffer=AC.createBuffer(1,1,22050);src.connect(AC.destination);src.start(0)}catch(e){}
+ if(unlocked)return;unlocked=true;setAudioSession('playback');
+ try{silentEl=document.createElement('audio');silentEl.src=silentWavUrl();silentEl.loop=true;silentEl.setAttribute('playsinline','');silentEl.volume=0.01;silentEl.play().catch(()=>{unlocked=false})}catch(e){unlocked=false}}
+['pointerdown','touchend','keydown'].forEach(t=>addEventListener(t,unlockAudio,{capture:true,passive:true}));
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&AC&&AC.state!=='running')AC.resume().catch(()=>{})});
 function newBus(){const g=AC.createGain();g.connect(master);g.connect(revIn);return g}
 function freqOf(tok,raga){const r=RAGAS[raga]||RAGAS.mmg;let s=r.semi[tok.sw];if(s===undefined)s=RAGAS.mmg.semi[tok.sw];return basePitch()*Math.pow(2,(s+12*tok.o)/12)}
 function voice(f,t,dur,out,vol=.3){
