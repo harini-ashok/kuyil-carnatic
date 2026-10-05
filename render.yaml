@@ -1,0 +1,16 @@
+# Render Blueprint: one free web service. Set DATABASE_URL in the dashboard (see README).
+services:
+  - type: web
+    name: kuyil-carnatic
+    runtime: node
+    plan: free            # change to "starter" ($7/month) to stop it sleeping when idle
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false       # paste your Neon (or other Postgres) connection string when prompted

@@ -1,0 +1,18 @@
+{
+  "name": "kuyil-carnatic",
+  "version": "1.0.0",
+  "description": "A Duolingo-style Carnatic music course with singing check, accounts and saved progress.",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "express": "^5.2.1",
+    "pg": "^8.23.1"
+  }
+}
