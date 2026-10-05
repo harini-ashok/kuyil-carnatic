@@ -73,7 +73,7 @@ function bindSing(e){
     setMySa(f);m.textContent=`Got it: your Sa is ${Math.round(f)} Hz. Listen…`;playSeq("S P S'",{bpm:90});setTimeout(()=>renderSingAgain(e),2400)}
    catch(err){m.textContent=micError(err);b.disabled=false}};
   return}
- const target=parse(e.seq).filter(t=>!t.k),{tol,hold:HOLD}=lvl();let idx=0,hold=0,quietUntil=0,offSince=0;
+ const target=withDir(parse(e.seq),e.raga).filter(t=>!t.k),{tol,hold:HOLD}=lvl();let idx=0,hold=0,quietUntil=0,offSince=0;
  const msg=h=>$('#sMsg').innerHTML=h,fill=$('#sFill'),needle=$('#sNeedle');
  const mark=()=>{document.querySelectorAll('.stgt').forEach((x,i)=>{x.classList.toggle('ok',i<idx);x.classList.toggle('now',i===idx)});if(target[idx])$('#sNow').innerHTML=swHTML(target[idx])};
  mark();

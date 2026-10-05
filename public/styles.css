@@ -155,6 +155,8 @@ h1,h2,h3{font-family:var(--f-display);line-height:1.15;text-wrap:balance;margin:
 .beat{display:flex;gap:4px;padding:2px 5px;border-radius:8px;min-width:28px;justify-content:center}
 .beat.now{background:color-mix(in oklab,var(--marigold) 22%,transparent)}
 .tok{display:inline-grid;place-items:center;min-width:16px;border-radius:6px;padding:2px 1px}
+.tok .lyr{display:block;margin-top:5px;font-family:var(--f-body,inherit);font-size:11px;font-weight:500;line-height:1.1;color:var(--muted);white-space:nowrap}
+.tok.on .lyr{color:inherit}
 .tok.on{background:var(--marigold);color:var(--on-accent)}
 .sep{color:var(--ink-soft);font-weight:800;padding-inline:2px;font-family:var(--f-display)}
 .acts{display:flex;gap:2px;font-size:11px;color:var(--ink-soft);white-space:nowrap}
@@ -244,3 +246,7 @@ body{margin:0}
 .tbig small{font-size:16px;color:var(--ink-soft);font-family:var(--f-body)}
 #sync[data-bad="1"]{color:var(--bad)}
 .credit a{color:var(--peacock)}
+
+.part{font-family:var(--f-display);font-size:13px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);text-align:center;margin:28px 0 -4px}
+.part::before,.part::after{content:"";display:inline-block;width:36px;height:2px;background:var(--line);vertical-align:middle;margin:0 10px}
+.coming{margin:6px 0 0;padding-left:18px;font-size:15px}

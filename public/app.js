@@ -46,7 +46,7 @@ function unlockAudio(){
 ['pointerdown','touchend','keydown'].forEach(t=>addEventListener(t,unlockAudio,{capture:true,passive:true}));
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&AC&&AC.state!=='running')AC.resume().catch(()=>{})});
 function newBus(){const g=AC.createGain();g.connect(master);g.connect(revIn);return g}
-function freqOf(tok,raga){const r=RAGAS[raga]||RAGAS.mmg;let s=r.semi[tok.sw];if(s===undefined)s=RAGAS.mmg.semi[tok.sw];return basePitch()*Math.pow(2,(s+12*tok.o)/12)}
+function freqOf(tok,raga){return basePitch()*Math.pow(2,(semiOf(tok,raga)+12*tok.o)/12)}
 function voice(f,t,dur,out,vol=.3){
  const c=AC,end=t+Math.max(dur,.14),g=c.createGain();
  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.025);g.gain.setTargetAtTime(vol*.72,t+.04,.18);g.gain.setTargetAtTime(0,end-.03,.045);
@@ -59,7 +59,7 @@ function voice(f,t,dur,out,vol=.3){
  [o1,o2,o3,lfo].forEach(o=>{o.start(t);o.stop(end+.35)})}
 function perc(kind,t,out){
  const c=AC;
- if(kind==='f1'||kind==='f2'||kind==='f3'||kind==='tick'){const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=kind==='tick'?1900:1450;g.gain.setValueAtTime(.32,t);g.gain.exponentialRampToValueAtTime(.001,t+.06);o.connect(g);g.connect(out);o.start(t);o.stop(t+.08);return}
+ if(kind[0]==='f'||kind==='tick'){const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=kind==='tick'?1900:1450;g.gain.setValueAtTime(.32,t);g.gain.exponentialRampToValueAtTime(.001,t+.06);o.connect(g);g.connect(out);o.start(t);o.stop(t+.08);return}
  const n=c.createBufferSource();n.buffer=noiseBuf;const f=c.createBiquadFilter(),g=c.createGain();
  if(kind==='clap'){f.type='bandpass';f.frequency.value=1300;f.Q.value=.9;g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(.9,t+.004);g.gain.exponentialRampToValueAtTime(.001,t+.14)}
  else{f.type='lowpass';f.frequency.value=700;g.gain.setValueAtTime(.0001,t);g.gain.linearRampToValueAtTime(.5,t+.03);g.gain.exponentialRampToValueAtTime(.001,t+.22)}
@@ -67,7 +67,7 @@ function perc(kind,t,out){
 function stopAll(){if(!cur)return;cur.timers.forEach(clearTimeout);try{cur.bus.gain.setTargetAtTime(0,AC.currentTime,.02)}catch(e){}const b=cur.bus,cb=cur.onStop;setTimeout(()=>{try{b.disconnect()}catch(e){}},400);cur=null;cb&&cb()}
 function playSeq(seq,o={}){
  ac();stopAll();
- const toks=parse(seq),spb=2**((o.kala||1)-1),slot=60/(o.bpm||70)/spb,bus=newBus(),t0=AC.currentTime+.12,timers=[];
+ const toks=withDir(parse(seq),o.raga||'mmg'),spb=2**((o.kala||1)-1),slot=60/(o.bpm||70)/spb,bus=newBus(),t0=AC.currentTime+.12,timers=[];
  toks.forEach((tk,i)=>{if(tk.k)return;let n=1;while(toks[i+n]&&toks[i+n].k)n++;voice(freqOf(tk,o.raga||'mmg'),t0+i*slot,n*slot*.94,bus)});
  if(o.thala){const acts=THALAS[o.thala].acts,beats=Math.ceil(toks.length/spb);for(let b=0;b<beats;b++)perc(acts[b%acts.length],t0+b*spb*slot,bus)}
  const lead=(t0-AC.currentTime)*1000;
@@ -129,14 +129,14 @@ function kuyil(mood='happy'){
 /* ============ RENDER HELPERS ============ */
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function swHTML(tk){if(tk.k)return '<span class="kv">,</span>';const lab=S.names==='long'?SW_SHORT[tk.sw]:tk.sw;return `<span class="sw${tk.o>0?' up':tk.o<0?' dn':''}">${lab}</span>`}
+function swHTML(tk){if(tk.k)return '<span class="kv">,</span>';const lab=S.names==='long'?SW_SHORT[tk.sw]:tk.sw;return `<span class="sw${tk.o>0?' up':tk.o<0?' dn':''}">${lab}${tk.v?`<sub>${tk.v}</sub>`:''}</span>`}
 function tokLabel(str){const t=parse(str)[0];return swHTML(t)}
 function tileLabel(s){const up=s.endsWith("'");return up?`<span class="sw up">${s.slice(0,-1)}</span>`:esc(s)}
-function notationHTML(seq,thala,kala,off=0){
- const toks=parse(seq),spb=2**((kala||1)-1),T=THALAS[thala],per=T.acts.length,ends=[];let a=0;T.angas.forEach(n=>{a+=n;ends.push(a)});
+function notationHTML(seq,thala,kala,off=0,sa=null){
+ const toks=parse(seq),syl=sa?sa.trim().split(/\s+/):null,spb=2**((kala||1)-1),T=THALAS[thala],per=T.acts.length,ends=[];let a=0;T.angas.forEach(n=>{a+=n;ends.push(a)});
  const beats=Math.ceil(toks.length/spb);let html='',b=0;
  while(b<beats){html+='<div class="av">';for(let k=0;k<per&&b<beats;k++,b++){
-   html+=`<span class="beat" data-b="${b}">`;for(let j=0;j<spb;j++){const i=b*spb+j;if(toks[i])html+=`<span class="tok" data-i="${i+off}">${swHTML(toks[i])}</span>`}html+='</span>';
+   html+=`<span class="beat" data-b="${b}">`;for(let j=0;j<spb;j++){const i=b*spb+j;if(toks[i])html+=`<span class="tok" data-i="${i+off}">${swHTML(toks[i])}${syl?`<span class="lyr">${esc(syl[i]&&syl[i]!=='-'?syl[i]:'\u00a0')}</span>`:''}</span>`}html+='</span>';
    const e=k+1;if(e===per)html+='<span class="sep">||</span>';else if(ends.includes(e))html+='<span class="sep">|</span>'}
   html+='</div>'}
  return html}
@@ -157,8 +157,9 @@ function renderHome(){
  const app=$('#app');let html=topBar();
  html+=`<nav class="tabs" role="tablist"><button class="tab" role="tab" aria-selected="${tab==='learn'}" data-tab="learn">Learn</button><button class="tab" role="tab" aria-selected="${tab==='practice'}" data-tab="practice">Practice room</button></nav>`;
  if(tab==='learn'){
-  let gi=0;const offs=[0,56,84,56,0,-56,-84,-56];
+  let gi=0,part='';const offs=[0,56,84,56,0,-56,-84,-56];
   UNITS.forEach((u,ui)=>{
+   if(u.part!==part){part=u.part;html+=`<h2 class="part">${esc(part)}</h2>`}
    html+=`<section style="--u:var(--${u.c});--u-deep:var(--${u.c}-deep)"><div class="unit"><div class="ux"><div class="eyebrow">Unit ${ui+1}</div><h2>${u.title}</h2><p>${u.blurb}</p></div><span class="pg">Book ${u.pages}</span></div><div class="path">`;
    u.lessons.forEach((l,li)=>{const idx=gi++,st=lessonState(idx),off=offs[idx%8];
     const stars=S.done[l.id]||0;
@@ -169,8 +170,8 @@ function renderHome(){
     if(openNode===idx){html+=`<div class="pop"><h3>${esc(l.title)}</h3><p>${st==='locked'?'Finish the lessons before this one to unlock it.':`Lesson ${li+1} of ${u.lessons.length} · ${l.ex.length} steps`}</p>${st==='locked'?'':`<button class="btn wide" data-start="${idx}">${st==='done'?'Practise again +5 XP':'Start +10 XP'}</button>`}</div>`}
    });
    html+='</div></section>'});
-  html+=`<div class="finale">${kuyil('wow')}<div><b>Next in the book: Swarajathis and Jathiswarams.</b><br>Finish the geethams and you have completed the beginner foundation that Purandara Dasa laid out.</div></div>
-   <p class="credit">Lesson order follows <i>Sadhakam: Carnatic Music Sadhaka Sahayi & Lessons</i> by Suresh Narayanan. Geetham notation from <a href="https://www.karnatik.com/geetams.shtml" target="_blank" rel="noopener">karnatik.com</a>.</p>`;
+  html+=`<div class="finale">${kuyil('wow')}<div><b>Still to come from the book</b><ul class="coming">${COMING.map(c=>`<li>${esc(c)}</li>`).join('')}</ul></div></div>
+   <p class="credit">Lessons follow the contents of <i>Sadhakam: Carnatic Music Sadhaka Sahayi & Lessons</i> by Suresh Narayanan. Geetham notation and words from the Gurukulam geetham notes; the lakshana geetham is from Sadhakam.</p>`;
  } else html+=practiceHTML();
  app.innerHTML=html;bindTop();
  app.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;openNode=null;render()});
@@ -307,8 +308,8 @@ function playerHTML(e){
   <label><input type="checkbox" data-pl="thala" checked> Thala clicks</label></div>
   <div class="muted" style="font-size:13px">${THALAS[e.thala].name}: ${THALAS[e.thala].acts.map(a=>ACT_LABEL[a]).join(' · ')}</div>
   <div class="nota" data-pl="nota">${notaFor(e,e.kala||1)}</div>`}
-function notaFor(e,kala){if(!e.sections)return notationHTML(e.seq,e.thala,kala);let off=0;
- return e.sections.map(sec=>{const h=`<div class="seclab">${esc(sec.label)}</div>`+notationHTML(sec.seq,e.thala,kala,off);off+=parse(sec.seq).length;return h}).join('')}
+function notaFor(e,kala){if(!e.sections)return notationHTML(e.seq,e.thala,kala,0,e.sa);let off=0;
+ return e.sections.map(sec=>{const h=`<div class="seclab">${esc(sec.label)}</div>`+notationHTML(sec.seq,e.thala,kala,off,sec.sa);off+=parse(sec.seq).length;return h}).join('')}
 function bindPlayer(e,onPlayed,root=document){
  let kala=e.kala||1,playing=false;const nota=root.querySelector('[data-pl="nota"]'),go=root.querySelector('[data-pl="go"]'),bpm=root.querySelector('[data-pl="bpm"]'),th=root.querySelector('[data-pl="thala"]');
  const setBtn=p=>{playing=p;go.innerHTML=p?`${I.stop} Stop`:`${I.play} Play`;go.classList.toggle('playing',p)};
@@ -325,7 +326,7 @@ function bindPlayer(e,onPlayed,root=document){
 function thalaHTML(e){const T=THALAS[e.thala];
  return `<div class="kind">Keep thala</div><h2>${e.q}</h2><p class="muted" style="margin:-8px 0 0">${T.name}. After the 4-beat count-in, tap Clap, Finger or Wave on each beat. Keys: 1, 2, 3.</p>
   <div class="countin" id="countin" aria-live="polite"></div>
-  <div class="tcells" style="--n:${T.acts.length}">${T.acts.map((a,i)=>`<div class="tcell ${e.hints?'':'hidehint'}" data-c="${i}">${a==='clap'?I.clap:a==='wave'?I.wave:I.finger}<span>${ACT_LABEL[a]}</span></div>`).join('')}</div>
+  <div class="tcells" style="--n:${Math.min(T.acts.length,7)}">${T.acts.map((a,i)=>`<div class="tcell ${e.hints?'':'hidehint'}" data-c="${i}">${a==='clap'?I.clap:a==='wave'?I.wave:I.finger}<span>${ACT_LABEL[a]}</span></div>`).join('')}</div>
   <div class="row"><button class="playbtn big" id="tStart">${I.play} Start</button><span class="muted" id="tMsg"></span></div>
   <div class="tbtns"><button class="tbtn" data-act="clap">${I.clap}Clap</button><button class="tbtn" data-act="finger">${I.finger}Finger</button><button class="tbtn" data-act="wave">${I.wave}Wave</button></div>`}
 let TH=null;
@@ -358,9 +359,14 @@ function finishThalaGrade(){
 /* ============ PRACTICE ROOM ============ */
 const LIBRARY=[
  ...Object.keys(SARALI).map(k=>({label:`Sarali ${k}`,seq:SARALI[k],thala:'adi',raga:'mmg'})),
+ ...Object.keys(MADHYA).map(k=>({label:`Madhya sthayi ${k}`,seq:MADHYA[k],thala:'adi',raga:'mmg'})),
+ ...Object.keys(THARA).map(k=>({label:`Thara sthayi ${k}`,seq:THARA[k],thala:'adi',raga:'mmg'})),
+ ...Object.keys(MANDRA).map(k=>({label:`Mandhra sthayi ${k}`,seq:MANDRA[k],thala:'adi',raga:'mmg'})),
  ...Object.keys(JANTA).map(k=>({label:`Janta ${k}`,seq:JANTA[k],thala:'adi',raga:'mmg',kala:2})),
- {label:'Eka alankaram',seq:ekaAlankaram(),thala:'eka',raga:'mmg'},
- {label:'Dhruva alankaram',seq:dhruvaAlankaram(),thala:'dhruva',raga:'mmg'},
+ ...Object.keys(BOOK.vakra).map(k=>({label:`Vakra Janta ${k}`,seq:ex('vakra',k),thala:'adi',raga:'mmg',kala:2})),
+ ...Object.keys(BOOK.dhattu).map(k=>({label:`Dhattu ${k}`,seq:ex('dhattu',k),thala:'adi',raga:'mmg'})),
+ ...Object.keys(BOOK.alankara).map(k=>({label:`${THALAS[ALANKARA_THALA[k]].name} alankaram`,seq:ex('alankara',k),thala:ALANKARA_THALA[k],raga:'mmg'})),
+ ...GEETHAM_LIB,
  ...Object.entries(RAGAS).map(([k,r])=>({label:`${r.name} arohana & avarohana`,seq:`${r.aro} ${r.ava}`,thala:'adi',raga:k}))];
 let prRaga='mmg',prLib=0;
 function practiceHTML(){
