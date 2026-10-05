@@ -19,17 +19,28 @@ async function startMic(onPitch){
   onPitch(f,r.rms)},40)};
  return MIC}
 function stopMic(){if(!MIC)return;clearInterval(MIC.timer);MIC.stream.getTracks().forEach(t=>t.stop());try{MIC.src.disconnect();MIC.mc.close()}catch(e){}MIC=null;setAudioSession('playback');if(AC&&AC.state!=='running')AC.resume().catch(()=>{});if(window._droneWasOn){window._droneWasOn=false;setDrone(true)}}
-/* YIN pitch estimate, limited to the singing range (70–1000 Hz) */
+/* YIN pitch estimate, limited to the singing range (70–1000 Hz).
+   Comparisons ignore the octave, so landing on 2× the period is harmless, but landing on
+   3× (or ⅓×, 5×) the period reads a correct Sa as Pa, Ma or Dha. So instead of taking the
+   first dip under a fixed threshold, take the deepest dip, then step down to the shortest
+   period whose every multiple up to that dip is also a dip: that is the fundamental. */
 function yin(buf,sr){
  let rms=0;for(let i=0;i<buf.length;i++)rms+=buf[i]*buf[i];rms=Math.sqrt(rms/buf.length);
  if(rms<0.006)return{f:-1,rms};
- const maxTau=Math.min(Math.floor(sr/70),buf.length>>1),minTau=Math.floor(sr/1000),W=buf.length-maxTau,d=new Float32Array(maxTau+1);
+ const maxTau=Math.min(Math.floor(sr/70),buf.length>>1),minTau=Math.floor(sr/1000),W=buf.length-maxTau,d=new Float32Array(maxTau+2);
  for(let tau=1;tau<=maxTau;tau++){let s=0;for(let i=0;i<W;i++){const x=buf[i]-buf[i+tau];s+=x*x}d[tau]=s}
- let run=0;d[0]=1;for(let tau=1;tau<=maxTau;tau++){run+=d[tau];d[tau]=run?d[tau]*tau/run:1}
- let tau=-1;for(let t=minTau;t<maxTau;t++){if(d[t]<0.2){while(t+1<maxTau&&d[t+1]<d[t])t++;tau=t;break}}
- if(tau<0)return{f:-1,rms};
- const a=d[tau-1],b=d[tau],c=d[tau+1]||b,den=a-2*b+c,shift=den?(a-c)/(2*den):0;
- return{f:sr/(tau+shift),rms}}
+ let run=0;d[0]=1;for(let tau=1;tau<=maxTau;tau++){run+=d[tau];d[tau]=run?d[tau]*tau/run:1}d[maxTau+1]=1;
+ let best=-1;for(let t=minTau;t<maxTau;t++)if(best<0||d[t]<d[best])best=t;
+ if(best<0||d[best]>0.45)return{f:-1,rms};
+ /* the lowest point of d within ±4% of tau */
+ const dip=tau=>{let b=-1;for(let t=Math.max(minTau,Math.floor(tau*.96));t<=Math.min(maxTau-1,Math.ceil(tau*1.04));t++)if(b<0||d[t]<d[b])b=t;return b};
+ const ok=d[best]+0.05;
+ let tau=best;
+ for(let k=8;k>=2;k--){const p=dip(best/k);if(p<0||p<minTau||d[p]>ok)continue;
+  let all=true;for(let m=2;m<k;m++){const q=dip(p*m);if(q<0||d[q]>ok){all=false;break}}
+  if(all){tau=p;break}}
+ const a=d[tau-1]||d[tau],b=d[tau],c=d[tau+1],den=a-2*b+c,shift=den?(a-c)/(2*den):0;
+ return{f:sr/(tau+Math.max(-1,Math.min(1,shift))),rms}}
 const NAMES12=['S','R1','R2','G2','G3','M1','M2','P','D1','D2','N2','N3'];
 function centsFold(f,target){const c=1200*Math.log2(f/target);return ((c%1200)+1800)%1200-600}
 function describe(f){const semi=12*Math.log2(f/basePitch()),n=Math.round(semi),cents=Math.round((semi-n)*100),pc=((n%12)+12)%12,oct=Math.floor(n/12);
@@ -45,10 +56,11 @@ async function captureSa(onLevel){
  if(got.length<15)return null;
  got.sort((a,b)=>a-b);const mid=got.slice(got.length*.25|0,got.length*.75|0);
  return mid[mid.length>>1]}
-function setMySa(f){S.saHz=Math.round(f*100)/100;S.pitch='mine';save()}
+function setMySa(f){S.saHz=Math.round(f*100)/100;S.pitch='mine';S.calV=CAL_V;save()}
 
 /* ============ SING EXERCISE ============ */
-const needsCal=()=>!S.saHz&&!S.calSkipped;
+/* A Sa measured before the overtone fix (calV < 2) may be a fifth off, so ask once more. */
+const CAL_V=2,needsCal=()=>!S.calSkipped&&(!S.saHz||S.calV!==CAL_V);
 function singHTML(e){const target=parse(e.seq).filter(t=>!t.k);
  if(needsCal())return `<div class="kind">Sing</div><h2>First, let Kuyil learn your Sa</h2>
   <div class="say">${kuyil()}<div class="bubble"><p>Everyone’s voice sits in a different place. Sing a long, comfortable <b>“saaa”</b>, not too high and not too low, and hold it for two seconds.</p><p>Every note after this is checked against <b>your</b> Sa, so you never have to match a pitch that doesn’t suit your voice.</p></div></div>
